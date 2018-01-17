@@ -44,8 +44,7 @@ export default class Map extends Component {
         longitudeDelta: LONGITUDE_DELTA,
       },
       dest: {
-        latitude: 31.6415409,
-        longitude: -8.0153567,
+        destinationName : "Medicine Marrakech",
         latitudeDelta: LATITUDE_DELTA,
         longitudeDelta: LONGITUDE_DELTA,
       },
@@ -75,8 +74,7 @@ export default class Map extends Component {
           }
         });
 
-        this.getDirections(`${ this.state.dep.latitude }, ${ this.state.dep.longitude }`,
-        `${ this.state.dest.latitude }, ${ this.state.dest.longitude }`);
+        this.getDirections({ lat : this.state.dep.latitude , lon : this.state.dep.longitude }, this.state.dest.destinationName);
 
       },
     (error) => console.log(error.message),
@@ -84,9 +82,21 @@ export default class Map extends Component {
     );
   }
 
-  async getDirections(startLoc, destinationLoc) {
+  async getDirections(startLoc, destination) {
     try {
-        let resp = await fetch(`https://maps.googleapis.com/maps/api/directions/json?origin=${ startLoc }&destination=${ destinationLoc }&mode=walking`)
+      let { lat, lon } = startLoc;
+        let resp = await fetch("http://10.0.2.2:3000/api/getDirection",
+          {
+            method: 'POST', // or 'PUT'
+            body: JSON.stringify({
+              destination,
+              lat,
+              lon
+            }), 
+            headers: new Headers({
+              'Content-Type': 'application/json'
+          })
+        });
         let respJson = await resp.json();
         let points = Polyline.decode(respJson.routes[0].overview_polyline.points);
         let coords = points.map((point, index) => {
@@ -95,23 +105,13 @@ export default class Map extends Component {
                 longitude : point[1]
             }
         })
-        var path = RNFS.DocumentDirectoryPath + '/brahim.txt';
-        
-        // write the file
-        RNFS.writeFile(path, JSON.stringify(coords), 'utf8')
-          .then((success) => {
-            console.log('FILE WRITTEN!');
-            this.setState({coords: coords})
-          })
-          .catch((err) => {
-            console.log(err.message);
-          });
-        
-        
+      
+        this.setState({coords: coords})
+                
         return coords
     } catch(error) {
         alert(error)
-        return error
+        console.log(error);
     }
 }
     
@@ -151,10 +151,6 @@ export default class Map extends Component {
         <MapView.Marker
           coordinate={ this.state.dep }
           title={"dep"}
-        />
-        <MapView.Marker
-          coordinate={ this.state.dest }
-          title={"dest"}
         />
         <MapView.Polyline 
             coordinates={this.state.coords}
