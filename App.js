@@ -10,7 +10,7 @@ import {
   View,
 } from 'react-native';
 
-import Map from './src/components/mapView';
+import Root from './src/root';
 
 export default class App extends Component {
 
@@ -22,7 +22,7 @@ export default class App extends Component {
   
   render() {
     return (
-        <Map />
+        <Root />
     );
   }
 }

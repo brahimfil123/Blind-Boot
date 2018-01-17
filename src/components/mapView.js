@@ -14,7 +14,6 @@ import MapView, {PROVIDER_GOOGLE} from 'react-native-maps';
 import Polyline from '@mapbox/polyline';
 //import {checkPermission} from 'react-native-android-permissions';
 import mapStyle from '../../MapStyles/mapStyle.json';
-import RNFS from 'react-native-fs';
 
 let { width, height } = Dimensions.get('window');
 
@@ -38,8 +37,6 @@ export default class Map extends Component {
         longitudeDelta: LONGITUDE_DELTA,
       },
       dep: {
-        latitude: LATITUDE,
-        longitude: LONGITUDE,
         latitudeDelta: LATITUDE_DELTA,
         longitudeDelta: LONGITUDE_DELTA,
       },
@@ -49,11 +46,7 @@ export default class Map extends Component {
         longitudeDelta: LONGITUDE_DELTA,
       },
       coords : [],
-      markers : [
-        {
-          title : "Me"
-        }
-      ]
+      markers : []
     };
   }
 
@@ -66,14 +59,14 @@ export default class Map extends Component {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude,
             latitudeDelta: LATITUDE_DELTA,
-            longitudeDelta: LONGITUDE_DELTA,
+            longitudeDelta: LONGITUDE_DELTA
           },
           dep: {
             latitude: position.coords.latitude,
             longitude: position.coords.longitude
           }
         });
-
+        
         this.getDirections({ lat : this.state.dep.latitude , lon : this.state.dep.longitude }, this.state.dest.destinationName);
 
       },
@@ -98,15 +91,24 @@ export default class Map extends Component {
           })
         });
         let respJson = await resp.json();
-        let points = Polyline.decode(respJson.routes[0].overview_polyline.points);
+        let points = Polyline.decode(respJson.data.routes[0].overview_polyline.points);
         let coords = points.map((point, index) => {
             return  {
                 latitude : point[0],
                 longitude : point[1]
             }
         })
-      
-        this.setState({coords: coords})
+        let mrkrs = this.state.markers;
+        mrkrs.push({
+          latitude: respJson.destination.lat,
+          longitude: respJson.destination.lon,
+          latitudeDelta: LATITUDE_DELTA,
+          longitudeDelta: LONGITUDE_DELTA
+        });
+        this.setState({
+          coords: coords,
+          markers : mrkrs
+        });
                 
         return coords
     } catch(error) {
@@ -114,8 +116,21 @@ export default class Map extends Component {
         console.log(error);
     }
 }
+  renderMarkers(){
     
-    /*this.watchID = navigator.geolocation.watchPosition(
+    if(!this.state.markers[0]){
+      return [];
+    }
+
+    return this.state.markers.map(marker => <MapView.Marker  key={this.state.dest.destinationName} coordinate={ marker } />);
+  }
+    
+    /*
+    <MapView.Marker
+          coordinate={ this.state.dep }
+          title={"dep"}
+        />
+    this.watchID = navigator.geolocation.watchPosition(
       position => {
         this.setState({
           region: {
@@ -148,10 +163,7 @@ export default class Map extends Component {
         onRegionChange={ region => this.setState({region}) }
         //onRegionChangeComplete={ region => this.setState({region}) }
       >
-        <MapView.Marker
-          coordinate={ this.state.dep }
-          title={"dep"}
-        />
+        {this.renderMarkers()}
         <MapView.Polyline 
             coordinates={this.state.coords}
             strokeWidth={10}
