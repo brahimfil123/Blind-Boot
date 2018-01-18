@@ -8,20 +8,26 @@ import React, { Component } from 'react';
 import {
   StyleSheet,
   View,
-  Dimensions
+  Dimensions,
+  Text,
+  TouchableOpacity
 } from 'react-native';
 import MapView, {PROVIDER_GOOGLE} from 'react-native-maps';
-import Polyline from '@mapbox/polyline';
 //import {checkPermission} from 'react-native-android-permissions';
 import mapStyle from '../../MapStyles/mapStyle.json';
+import Voice from 'react-native-voice';
+import Tts from 'react-native-tts';
+import MapViewDirections from 'react-native-maps-directions';
+import data from '../../config.json';
 
 let { width, height } = Dimensions.get('window');
 
 const ASPECT_RATIO = width / height;
 const LATITUDE = 31.6488;
 const LONGITUDE = -8.02054;
-const LATITUDE_DELTA = 0.003;
+const LATITUDE_DELTA = 0.03;
 const LONGITUDE_DELTA = LATITUDE_DELTA * ASPECT_RATIO;
+const GOOGLE_MAPS_APIKEY = 'AIzaSyDM9hxPzUUHTzKUDrlpEgnv_K914dYOdm4';
 
 
 export default class Map extends Component {
@@ -37,83 +43,99 @@ export default class Map extends Component {
         longitudeDelta: LONGITUDE_DELTA,
       },
       dep: {
-        latitudeDelta: LATITUDE_DELTA,
-        longitudeDelta: LONGITUDE_DELTA,
       },
-      dest: {
-        destinationName : "Medicine Marrakech",
-        latitudeDelta: LATITUDE_DELTA,
-        longitudeDelta: LONGITUDE_DELTA,
+      dest: { 
       },
       coords : [],
-      markers : []
+      markers : [],
+      results : [],
+      results1 : []
     };
+    Tts.setDefaultLanguage('en-US');
+    
+        Voice.onSpeechResults = this.onSpeechResults.bind(this);
+        Voice.onSpeechPartialResults = this.onSpeechPartialResults.bind(this);
+  }
+
+  onSpeechResults(e){
+    
+    this.setState({
+        results1 : e.value,
+        dest : {
+          destinationName : "Medicine Marrakech"
+        }
+    })
+  }
+
+  onSpeechPartialResults(e){
+    this.setState({
+        results : e.value
+        
+    })
   }
 
   componentDidMount() {
 
-    navigator.geolocation.getCurrentPosition(
-      position => {
-        this.setState({
-          region: {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude,
-            latitudeDelta: LATITUDE_DELTA,
-            longitudeDelta: LONGITUDE_DELTA
-          },
-          dep: {
-            latitude: position.coords.latitude,
-            longitude: position.coords.longitude
-          }
-        });
-        
-        this.getDirections({ lat : this.state.dep.latitude , lon : this.state.dep.longitude }, this.state.dest.destinationName);
+    return navigator.geolocation.getCurrentPosition(
+              position => {
+                return this.setState({
+                          region: {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude,
+                            latitudeDelta: LATITUDE_DELTA,
+                            longitudeDelta: LONGITUDE_DELTA
+                          },
+                          dep: {
+                            latitude: position.coords.latitude,
+                            longitude: position.coords.longitude,
+                            latitudeDelta: LATITUDE_DELTA,
+                            longitudeDelta: LONGITUDE_DELTA
+                          }
+                        });
 
-      },
-    (error) => console.log(error.message),
-    { enableHighAccuracy: true, timeout: 20000, maximumAge: 10000 },
-    );
+              },
+            (error) => console.log(error.message),
+            { enableHighAccuracy: true, timeout: 20000, maximumAge: 10000 },
+          );
   }
+
 
   async getDirections(startLoc, destination) {
     try {
-      let { lat, lon } = startLoc;
-        let resp = await fetch("http://10.0.2.2:3000/api/getDirection",
-          {
-            method: 'POST', // or 'PUT'
-            body: JSON.stringify({
-              destination,
-              lat,
-              lon
-            }), 
-            headers: new Headers({
-              'Content-Type': 'application/json'
-          })
-        });
-        let respJson = await resp.json();
-        let points = Polyline.decode(respJson.data.routes[0].overview_polyline.points);
-        let coords = points.map((point, index) => {
-            return  {
-                latitude : point[0],
-                longitude : point[1]
-            }
+
+      let resp = await fetch(`https://maps.googleapis.com/maps/api/geocode/json?address=${ destination }&key=AIzaSyBC4C4GGaTEKAlZbJaWGSFVGlQ-dpTfMG4`);
+      let respJson = await resp.json();
+      let destLoc = `${respJson.results[0].geometry.location.lat},${respJson.results[0].geometry.location.lng}`;
+        let coords = [];
+        coords.push(this.state.dep)
+          
+        coords.push({
+          latitude: respJson.results[0].geometry.location.lat,
+          longitude: respJson.results[0].geometry.location.lng
         })
         let mrkrs = this.state.markers;
         mrkrs.push({
-          latitude: respJson.destination.lat,
-          longitude: respJson.destination.lon,
+          latitude: respJson.results[0].geometry.location.lat,
+          longitude: respJson.results[0].geometry.location.lng,
           latitudeDelta: LATITUDE_DELTA,
           longitudeDelta: LONGITUDE_DELTA
         });
         this.setState({
-          coords: coords,
-          markers : mrkrs
+          dest : {
+            latitude: respJson.results[0].geometry.location.lat,
+            longitude: respJson.results[0].geometry.location.lng,
+            latitudeDelta: LATITUDE_DELTA,
+            longitudeDelta: LONGITUDE_DELTA
+          },
+          markers : mrkrs,
+          coords : data
         });
+
+        Tts.speak('direction drown successfully');
                 
-        return coords
+        return mrkrs;
     } catch(error) {
-        alert(error)
-        console.log(error);
+      Tts.speak('please repeat the location or choose another one');
     }
 }
   renderMarkers(){
@@ -122,14 +144,10 @@ export default class Map extends Component {
       return [];
     }
 
-    return this.state.markers.map(marker => <MapView.Marker  key={this.state.dest.destinationName} coordinate={ marker } />);
+    return this.state.markers.map((marker, index) => <MapView.Marker  key={index} coordinate={ marker } />);
   }
     
     /*
-    <MapView.Marker
-          coordinate={ this.state.dep }
-          title={"dep"}
-        />
     this.watchID = navigator.geolocation.watchPosition(
       position => {
         this.setState({
@@ -148,36 +166,98 @@ export default class Map extends Component {
     navigator.geolocation.clearWatch(this.watchID);
   }*/
 
-  render() {
-    console.log("i am here");
-    return (
-      
-      <MapView
-        provider={ PROVIDER_GOOGLE }
-        style={ styles.container }
-        mapType='satellite'
-        customMapStyle={ mapStyle }
-        showsUserLocation={ true }
-        followUserLocation={true}
-        region={ this.state.region }
-        onRegionChange={ region => this.setState({region}) }
-        //onRegionChangeComplete={ region => this.setState({region}) }
-      >
-        {this.renderMarkers()}
-        <MapView.Polyline 
-            coordinates={this.state.coords}
-            strokeWidth={10}
-strokeColor="red"/>
-      </MapView>
-    );
+  _onPressButton() {
+
+    this.getDirections(`${this.state.dep.latitude}, ${this.state.dep.longitude}`, 
+    this.state.dest.destinationName);
+    
+        Voice.start('fr_FR');
+        Voice.stop();
+        
+    }
+    
+    render() {
+
+      return (
+        <View style={styles.container}>
+            <TouchableOpacity onPress={this._onPressButton.bind(this)}>
+                <View style={styles.button}>
+                <Text style={styles.buttonText}>Choose a place</Text>
+                </View>
+            </TouchableOpacity>
+            {
+                this.state.results.map( (text,index) => {
+                      return ( <Text key={index + 1}>{text}</Text> )
+                })
+            }
+            <MapView
+              style={styles.sub_container}
+              provider={ PROVIDER_GOOGLE }
+              mapType='satellite'
+              customMapStyle={ mapStyle }
+              showsUserLocation={ true }
+              followUserLocation={true}
+              ref={c => this.mapView = c}
+              region={ this.state.region }
+              onRegionChange={ region => this.setState({region}) }
+            >
+              {this.renderMarkers()}
+              {(this.state.coords.length >= 2 ) && (
+                  <MapViewDirections
+                    origin={this.state.coords[0]}
+                    destination={this.state.coords[this.state.coords.length-1]}
+                    apikey={GOOGLE_MAPS_APIKEY}
+                    strokeWidth={3}
+                    strokeColor="blue"
+                    mode="walking"
+                    avoid ="indoor|tolls|highways"
+                    transit_routing_preference="less_walking|fewer_transfers"
+                    onReady={(result) => {
+                      this.mapView.fitToCoordinates(result.coordinates, {
+                        edgePadding: {
+                          right: parseInt(width / 30, 10),
+                          bottom: parseInt(height / 30, 10),
+                          left: parseInt(width / 30, 10),
+                          top: parseInt(height / 30, 10),
+                        }
+                      });
+                    }}
+                    onError={(errorMessage) => {
+                      // console.log('GOT AN ERROR');
+                    }}
+                    
+                  />
+                )}
+            </MapView>
+          </View>
+      );
+    }
   }
-}
+ 
 
 const styles = StyleSheet.create({
   container: {
     height: '100%',
     width: '100%',
+    paddingTop: 60,
+    alignItems: 'center'
   },
+  sub_container: {
+    height: '80%',
+    width: '100%',
+    paddingTop: 60,
+    alignItems: 'center'
+  },
+  button: {
+    marginBottom: 30,
+    width: 260,
+    alignItems: 'center',
+    backgroundColor: '#2196F3'
+  },
+  buttonText: {
+    padding: 20,
+    color: 'white'
+  }
 });
 
 /*setTimeout(() => {

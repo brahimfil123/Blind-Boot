@@ -5,6 +5,7 @@ import {
 } from 'react-native';
 
 import Map from './components/mapView';
+import Recorder from './components/recorder';
 
 export default class Root extends Component {
 
